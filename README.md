@@ -1,7 +1,7 @@
 # なにこれ?
 
 ここから遊べる
-http://simiraaaa.github.io.altjstest/
+http://simiraaaa.github.io/altjstest/
 
 AltJSを作ってみたかったので、作った。
 主に演算子オーバーロードが実装したかった。
