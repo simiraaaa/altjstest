@@ -143,6 +143,11 @@ console.log(p1 <=: p2);
         width: 95%;
         height: 20vh;
       }
+      
+      .flex-between{
+        display: flex;
+        justify-content:space-around;
+      }
     </style>
   </head>
   <body>
@@ -156,17 +161,19 @@ console.log(p1 <=: p2);
     <p>
       <button type="button" name="button" id="run">実行!</button>
     </p>
+      <div class="flex-between">
+        <span>altjs:</span>
+        <span>コンパイル結果:</span>
+      </div>
     <div>
-        
       <textarea id="src" name="editor" class="jex editor">
       </textarea>
-      
       <textarea id="dst" class="compiled editor">
       </textarea>
       
     </div>
     
-    <div>
+    <div>console:
       <textarea id="log"></textarea>
     </div>
   </body>
