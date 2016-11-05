@@ -46,7 +46,7 @@
         var xml = new XMLHttpRequest();
         xml.onreadystatechange = function(){
           if(xml.readyState === 4)if(xml.status === 0 || (xml.status/100 | 0) === 2){
-            window.jexParser = peg.generate(xml.responseText, {chache: true});
+            window.jexParser = peg.generate(xml.responseText, {cache: true});
             var editor = document.getElementById('src');
 
             window.onkeydown = function(e){
