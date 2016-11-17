@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <title>jex test</title>
     <script src="escodegen.browser.js"></script>
-    <script src="peg.js"></script>
+    <script src="JexParser.js"></script>
     <script>
       function compile(){
         var src = document.getElementById('src').value;
@@ -27,7 +27,6 @@
         document.head.removeChild(s);
       }
       onload = function(){
-        var ALTPEGJS = 'jex.pegjs';
         var log = console.log;
         console.log = function(){
           var args = [].slice.call(arguments);
@@ -43,60 +42,65 @@
           });
           domlog.scrollTop = 99999999;
         };
-        var xml = new XMLHttpRequest();
-        xml.onreadystatechange = function(){
-          if(xml.readyState === 4)if(xml.status === 0 || (xml.status/100 | 0) === 2){
-            window.jexParser = peg.generate(xml.responseText, {cache: true});
-            var editor = document.getElementById('src');
+        
+        var editor = document.getElementById('src');
 
-            window.onkeydown = function(e){
-              if(e.ctrlKey || e.metaKey){
-                if(e.keyCode === 83 || e.keyCode === 13){
-                  e.preventDefault();
-                  compile() && run();
-                  return false;
-                }
-              }
-            };
-            editor.value = function(){/*
+        window.onkeydown = function(e){
+          if(e.ctrlKey || e.metaKey){
+            if(e.keyCode === 83 || e.keyCode === 13){
+              e.preventDefault();
+              compile() && run();
+              return false;
+            }
+          }
+        };
+        editor.value = function(){/*
 
 function es5func(a, b){
   return a + b;
 }
+// # は functionと同じ
 # altJsFunc(c, d){
   return es5func(c + d, 100);
 }
 var func2 = #(a){console.log(a);};
 func2(altJsFunc(5, 10));
-// 演算子オーバーロード
+// 演算子関数(演算子オーバーロード)
+// ^^ は　return
 var obj = {
   value: 100,
-  '+': #(v){
+  +: #(v){
     @value += v;
     return this;
   },
   
-  '-': #(v){
+  -: #(v){
     @value -= v;
-    return @;
+    ^^@;
   },
   
-  '<': #(elm){
+  <: #(elm){
     @children.push(elm);
-    return @;
+    ^^@;
   },
+  
+  >>: #(){
+    console.log(@);
+    ^^@;
+  },
+  
   children: []
 
 };
 
 // 使うときは演算子のあとに:
 obj <: 'child';
-console.log(obj +: 100 -: 50);
+obj +: 100 -: 50 >>: ;
 
 String.prototype['*'] = #(n){
   var res = '';
-  for(var i = 0;i < n; ++i) res += this;
-  return res;
+  for(var i = 0;i < n; ++i) res += @;
+  ^^res;
 };
 
 console.log('simir' + 'a' *: 4);
@@ -107,22 +111,22 @@ console.log('simir' + 'a' *: 4);
 }
 
 Pos.prototype = {
-  '-': #(p){
+  -: #(p){
     @x -= p.x;
     @y -= p.y;
     return @;
   },
   
-  '<': #(p){
-    return @len() < p.len();
+  <: #(p){
+    ^^ @ ?: < p ?: ;
   },
   
-  '<=': #(p){
-    return @len() <= p.len();
+  <=: #(p){
+    ^^ @ ?: <= p ?: ;
   },
   
-  len: function(){
-    return Math.sqrt(@x * @x + @y * @y);
+  ?: function(){
+    ^^Math.sqrt(@x * @x + @y * @y);
   },
 };
 
@@ -133,14 +137,22 @@ console.log(p1 <: p2);
 p2 -: p1 -: p1;
 console.log(p1 <=: p2);
 
+var p1 ?: 
+]> a - p2 ?: 
+]>> p2.x;
+
+console.log(a, p2);
+
+Number.prototype['**'] = #(n){
+  ^^Math.pow(@, n);
+};
+
+console.log(2 **: 10);
+
 */}.toString().replace(/.*\/\*|\*\/.*/g, '');
-            compile() && run();
-            document.getElementById('run').onclick = function(){compile()&&run();};
-          }
-        };
-        xml.open('GET', ALTPEGJS);
-        xml.send();
-      };
+      compile() && run();
+      document.getElementById('run').onclick = function(){compile()&&run();};
+    }
     </script>
     <style media="screen">
       .editor{
@@ -161,14 +173,11 @@ console.log(p1 <=: p2);
   </head>
   <body>
     <h1>AltJS のテスト</h1>
-    <ul>
-      <li># - function</li>
-      <li>@ - this</li>
-      <li>[operator]: - use overloaded operator (演算子オーバーロードの使用)</li>
-      <li>obj['operator'] = #(right){/* なんか計算 */ return this;} - define operator overload (演算子オーバーロードの定義)</li>
-    </ul>
     <p>
-      <button type="button" name="button" id="run">実行!</button>
+      README: https://github.com/simiraaaa/altjstest/blob/master/README.md
+    </p>
+    <p>
+      <button type="button" name="button" id="run">実行!(Command(Ctrl) + Enter)</button>
     </p>
       <div class="flex-between">
         <span>altjs:</span>

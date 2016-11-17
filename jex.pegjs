@@ -75,7 +75,7 @@
     }, head);
   }
   // add jex
-  function buildOverloadExpression(head, tail) {
+  function buildOperatorFunctionExpression(head, tail) {
     return tail.reduce(function(result, element) {
       return {
         type: "CallExpression",
@@ -85,13 +85,137 @@
           object: result,
           property: {
             type: "Literal",
-            value: element[1].slice(0, -1)
+            value: element[1]
           }
         },
-        arguments: [element[3]]
+        arguments: element[4] === null ? [] : [element[4]]
       };
     }, head);
   }
+  
+  // add jex
+  function buildReverseExpression(l, r, declare){
+    declare = !!declare;
+    r = buildReverseRight(r, declare);
+    var left = getLeftID(l, r.assignMember);
+    if(setReverseRight(left, r.right) && declare && !r.assignMember){
+      r.declarations.push(left.id.left);
+    }
+    if(declare) {
+      for(var i = 0, a = r.declarations, len = a.length; i < len; ++i){
+        a[i] = {
+          type: "VariableDeclarator",
+          id: a[i],
+          init: null
+        };
+      }
+      
+      return {
+        type: "Program",
+        body: [
+          {
+            type: "VariableDeclaration",
+            declarations: r.declarations,
+            kind: "var"
+          },
+          {
+            "type": "ExpressionStatement",
+            "expression": l
+          }
+        ]
+      };
+    }
+    return l;
+  }
+  
+  function buildReverseRight(r, declare){
+    var root = r.pop();
+    var last = root;
+    var declarations = [];
+    while(r.length > 0){
+      var p = r.pop();
+      var assignMember = p[2] === ']>>';
+      last = getLeftID(last[0], assignMember);
+      if(setReverseRight(last, p[0]) && declare && !assignMember){
+        declarations.push(last.id.left);
+      }
+      last = p;
+    }
+    
+    return {
+      right: root[0],
+      assignMember: root[2] === ']>>',
+      declarations:declarations
+    };
+  }
+  
+  function setReverseRight(left, right){
+    var id = left.id;
+    var p = left.parent;
+    if(id.type === "ThisExpression") {
+      p[TYPES_TO_PROPERTY_NAMES[p.type] || 'left'] = right;
+      return false;
+    }
+    else {
+      id2assign(id).right = right;
+      return true;
+    }
+  }
+
+  // add jex
+  function getLeftID(r, assignMember){
+    var parent = r;
+    while(r.left){
+      parent = r
+      r = r.left;
+    }
+    if(!assignMember) while(r.type !== 'Identifier' && r.type !== 'ThisExpression'){    
+      parent = r;
+      if(r.type==='CallExpression'){
+        r=r.callee;
+      }
+      else if(r.type === 'MemberExpression'){
+        r=r.object;
+      }
+      else{throw new Error('invalid type:' + r.type);}
+    }
+    return {parent: parent, id: r};
+  }
+
+  // add jex
+  function id2assign(id){
+    id.operator = '=';
+    if(id.type === 'Identifier'){
+      var name = id.name;
+      delete id.name;
+      id.type = 'AssignmentExpression';
+      id.left = {
+        type: 'Identifier',
+        name: name
+      };
+      return id;
+    }
+    else if(id.type === 'MemberExpression'){
+      var object   = id.object;
+      var property = id.property;
+      var computed = id.computed;
+      delete id.object;
+      delete id.property;
+      delete id.computed;
+      
+      id.type = 'AssignmentExpression';
+      id.left = {
+        type: 'MemberExpression',
+        object: object,
+        property: property,
+        computed: computed
+      };
+      return id;
+    }
+    // TODO: CallExpression ??
+    else {throw new Error('invalid type:' + id.type);}
+  }
+
 
   function optionalList(value) {
     return value !== null ? value : [];
@@ -348,7 +472,7 @@ UnicodeEscapeSequence
     }
 
 RegularExpressionLiteral "regular expression"
-  = "/" pattern:$RegularExpressionBody "/" flags:$RegularExpressionFlags {
+  = "/" pattern:$RegularExpressionBody ("/" ![=:]) flags:$RegularExpressionFlags {
       var value;
 
       try {
@@ -472,7 +596,7 @@ InstanceofToken = "instanceof" !IdentifierPart
 InToken         = "in"         !IdentifierPart
 NewToken        = "new"        !IdentifierPart
 NullToken       = "null"       !IdentifierPart
-ReturnToken     = "return"     !IdentifierPart
+ReturnToken     = "^^" / "return" !IdentifierPart
 SetToken        = "set"        !IdentifierPart
 SuperToken      = "super"      !IdentifierPart
 SwitchToken     = "switch"     !IdentifierPart
@@ -612,6 +736,9 @@ PropertyName
   = IdentifierName
   / StringLiteral
   / NumericLiteral
+  / operator:OperatorFunctionOperator {
+      return {type:'Literal', value:operator};
+    }
 
 PropertySetParameterList
   = id:Identifier { return [id]; }
@@ -625,7 +752,7 @@ MemberExpression
         }
     )
     tail:((
-      __ property:IdentifierName {
+      property:IdentifierName {
         return { property: property, computed: false };
       }
     )? (
@@ -742,9 +869,55 @@ UnaryOperator
   / "~"
   / "!"
 
-MultiplicativeExpression
+// add jex
+OperatorFunctionExpression
   = head:UnaryExpression
-    tail:(__ MultiplicativeOperator __ UnaryExpression)*
+    tail:(__ OperatorFunctionOperator ":" __ UnaryExpression?)*
+    { return buildOperatorFunctionExpression(head, tail); }
+
+OperatorFunctionOperator
+ = "==="
+ / "!=="
+ / ">>>="
+ / "<<="
+ / ">>="
+ / "**="
+ / ">>>"
+ / "=="
+ / "|="
+ / "&="
+ / "^="
+ / "+="
+ / "-="
+ / "*="
+ / "/="
+ / "%="
+ / "<="
+ / ">="
+ / "!="
+ / "<<"
+ / ">>"
+ / "||"
+ / "&&"
+ / "**"
+ / "+"
+ / "-"
+ / "*"
+ / "/"
+ / "%"
+ / "<"
+ / ">"
+ / "="
+ / "|"
+ / "&"
+ / "~"
+ / "^"
+ / "?"
+ / "!"
+ 
+MultiplicativeExpression
+  = head:OperatorFunctionExpression
+    tail:(__ MultiplicativeOperator __ OperatorFunctionExpression)*
     { return buildBinaryExpression(head, tail); }
 
 MultiplicativeOperator
@@ -752,37 +925,9 @@ MultiplicativeOperator
   / $("/" ![=:])
   / $("%" ![=:])
 
-  
-// add jex
-OverloadExpression
-  = head:MultiplicativeExpression
-    tail:(__ OverloadOperator __ MultiplicativeExpression)*
-    { return buildOverloadExpression(head, tail); }
-
-
-OverloadOperator
-  = "*:"
-  / "/:"
-  / "%:"
-  / "+:"
-  / "-:"
-  / ">>>:"
-  / "<<:"
-  / ">>:"
-  / "||:"
-  / "&&:"
-  / "&:"
-  / "^:"
-  / "|:"
-  / "~:"
-  / "<:"
-  / ">:"
-  / "<=:"
-  / ">=:"
-
 AdditiveExpression
-  = head:OverloadExpression
-    tail:(__ AdditiveOperator __ OverloadExpression)*
+  = head:MultiplicativeExpression
+    tail:(__ AdditiveOperator __ MultiplicativeExpression)*
     { return buildBinaryExpression(head, tail); }
 
 AdditiveOperator
@@ -933,6 +1078,20 @@ ConditionalExpressionNoIn
       };
     }
   / LogicalORExpressionNoIn
+  
+ReverseAssignmentExpression
+  = right:(ConditionalExpression __ ("]>>" / "]>") __)+
+    left:AssignmentExpression
+    {
+      return {left:left, right: right};
+    }
+
+ReverseAssignmentExpressionNoIn
+  = right:(ConditionalExpressionNoIn __ ("]>>" / "]>") __)+
+    left:AssignmentExpressionNoIn
+    {
+      return {left:left, right: right};
+    }
 
 AssignmentExpression
   = left:LeftHandSideExpression __
@@ -956,6 +1115,9 @@ AssignmentExpression
         left: left,
         right: right
       };
+    }
+  / expr:ReverseAssignmentExpression {
+      return buildReverseExpression(expr.left, expr.right);
     }
   / ConditionalExpression
 
@@ -982,6 +1144,9 @@ AssignmentExpressionNoIn
         right: right
       };
     }
+  / expr:ReverseAssignmentExpressionNoIn {
+      return buildReverseExpression(expr.left, expr.right);
+    }
   / ConditionalExpressionNoIn
 
 AssignmentOperator
@@ -996,17 +1161,6 @@ AssignmentOperator
   / "&="
   / "^="
   / "|="
-  / "*:="
-  / "/:="
-  / "%:="
-  / "+:="
-  / "-:="
-  / "<<:="
-  / ">>:="
-  / ">>>:="
-  / "&:="
-  / "^:="
-  / "|:="
 
 Expression
   = head:AssignmentExpression tail:(__ "," __ AssignmentExpression)* {
@@ -1059,6 +1213,9 @@ VariableStatement
         declarations: declarations,
         kind: "var"
       };
+    }
+  / VarToken __ expr:ReverseAssignmentExpression EOS {
+      return buildReverseExpression(expr.left, expr.right, true);
     }
 
 VariableDeclarationList
